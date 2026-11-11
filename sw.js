@@ -1,8 +1,8 @@
 // Mise en mémoire de l'application pour qu'elle s'ouvre sans réseau.
 // Pour forcer une mise à jour chez tous les appareils, changer V.
 // Seuls les caches « myfilms- » sont gérés ici : d'autres sites du même compte partagent le même espace de stockage.
-const V = 'myfilms-v1', IMG = 'myfilms-img-v1';
-const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
+const V = 'myfilms-v3', IMG = 'myfilms-img-v1';
+const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'confidentialite.html'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
