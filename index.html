@@ -273,7 +273,7 @@ try{items=clean(JSON.parse(localStorage.getItem(KEY)||'[]'))}catch(e){items=[];o
 var BK='myfilms-last-export';
 // Identifiant d'application Google (public, non secret). Vide = synchronisation Google masquée.
 var GCLIENT='942122623739-8furl2jomo2rd25u7h0reqqgk6caoq9u.apps.googleusercontent.com',GS='https://www.googleapis.com/auth/drive.appdata',GFLAG='myfilms-google',GNAME='my-films.json';
-var gOn=false,gTok=null,gExp=0,gLoad=null,needLogin=false,busy=false,again=false,lastOk=null,lastErr='';
+var HK='myfilms-google-hint',gOn=false,gTok=null,gExp=0,gLoad=null,needLogin=false,busy=false,again=false,lastOk=null,lastErr='';
 try{gOn=!!GCLIENT&&localStorage.getItem(GFLAG)==='1'}catch(e){}
 function setDirty(v){dirty=v;try{if(v)localStorage.setItem(DK,'1');else localStorage.removeItem(DK)}catch(e){}}
 function lastExport(){try{var t=parseInt(localStorage.getItem(BK)||'',10);return isNaN(t)?null:t}catch(e){return null}}
@@ -302,6 +302,15 @@ function status(){
   }
   $('stmsg').textContent=m;gui();
 }
+function gHintGet(){try{return localStorage.getItem(HK)||''}catch(e){return ''}}
+function gHint(){
+  if(gHintGet())return Promise.resolve();
+  return gApi('https://www.googleapis.com/drive/v3/about?fields='+encodeURIComponent('user(emailAddress)'))
+    .then(function(r){return r.ok?r.json():null}).then(function(j){
+      var m=j&&j.user&&j.user.emailAddress;
+      if(m&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m)){try{localStorage.setItem(HK,m)}catch(e){}}
+    }).catch(function(e){if(e&&(e.kind==='popup'||e.kind==='auth'||e.kind==='denied'))throw e});
+}
 function gFail(msg,kind){lastErr=msg;var e=new Error(msg);e.kind=kind||'api';throw e}
 function loadGIS(){
   if(window.google&&google.accounts&&google.accounts.oauth2)return Promise.resolve();
@@ -312,12 +321,13 @@ function loadGIS(){
 function getToken(){
   if(gTok&&Date.now()<gExp-60000)return Promise.resolve(gTok);
   return loadGIS().then(function(){return new Promise(function(res,rej){
-    var tc=google.accounts.oauth2.initTokenClient({client_id:GCLIENT,scope:GS,
+    var base={client_id:GCLIENT,scope:GS},hh=gHintGet();if(hh)base.hint=hh;
+    var tc=google.accounts.oauth2.initTokenClient(Object.assign(base,{
       callback:function(r){
         if(r&&r.access_token){gTok=r.access_token;gExp=Date.now()+(r.expires_in||3600)*1000;res(gTok)}
         else{var e=new Error('refus');e.kind=(r&&r.error==='access_denied')?'denied':'auth';rej(e)}
       },
-      error_callback:function(er){var e=new Error('popup');e.kind=(er&&er.type==='popup_closed')?'denied':'popup';rej(e)}});
+      error_callback:function(er){var e=new Error('popup');e.kind=(er&&er.type==='popup_closed')?'denied':'popup';rej(e)}}));
     tc.requestAccessToken({prompt:''});
   })});
 }
@@ -359,7 +369,7 @@ function gWrite(list,id){
 }
 function grun(tries){
   var rid=null,rver=null;
-  return gFind().then(function(f){rid=f&&f.id;rver=f&&String(f.version);return rid?gRead(rid):[]}).then(function(raw){
+  return gHint().then(function(){return gFind()}).then(function(f){rid=f&&f.id;rver=f&&String(f.version);return rid?gRead(rid):[]}).then(function(raw){
     var a=clean(raw),first=!synced;synced=true;lastOk=new Date();needLogin=false;
     var send=dirty||(first&&!a.length&&items.length>0);
     items=send?merge(items,a):a;
@@ -389,7 +399,7 @@ function save(){
 }
 function gConnect(){
   $('stmsg').textContent='Connexion à Google…';
-  getToken().then(function(){
+  getToken().then(function(){return gHint()}).then(function(){
     gOn=true;needLogin=false;try{localStorage.setItem(GFLAG,'1')}catch(e){}
     synced=false;lastErr='';pull();
   }).catch(function(e){
@@ -398,7 +408,7 @@ function gConnect(){
 }
 function gDisconnect(){
   var t=gTok;gOn=false;needLogin=false;gTok=null;synced=false;
-  try{localStorage.removeItem(GFLAG)}catch(e){}
+  try{localStorage.removeItem(GFLAG);localStorage.removeItem(HK)}catch(e){}
   try{if(t&&window.google&&google.accounts&&google.accounts.oauth2)google.accounts.oauth2.revoke(t,function(){})}catch(e){}
   status();$('stmsg').textContent='Déconnecté de Google. Tes films restent dans cet appareil et dans ton Drive. '+$('stmsg').textContent;
 }
