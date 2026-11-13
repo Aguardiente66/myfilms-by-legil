@@ -247,6 +247,7 @@ function S(v,n){return typeof v==='string'?v.slice(0,n):''}
 function clean(a){
   var o=[],seen={};
   (Array.isArray(a)?a:[]).forEach(function(x){
+    if(x&&typeof x==='object'&&x.del===true&&typeof x.id==='string'&&IDRE.test(x.id)&&!seen[x.id]){seen[x.id]=1;o.push({id:x.id,del:true,u:typeof x.u==='number'?x.u:0});return}
     if(!x||typeof x!=='object'||typeof x.id!=='string'||!IDRE.test(x.id)||seen[x.id]||typeof x.t!=='string'||!x.t.trim())return;
     seen[x.id]=1;var d={id:x.id,t:S(x.t,200)};
     if(x.k==='f'){d.k='f';if(typeof x.par==='string'&&IDRE.test(x.par))d.par=x.par}
@@ -270,6 +271,7 @@ function merge(loc,sv){
   return Object.keys(m).map(function(k){return m[k]});
 }
 try{items=clean(JSON.parse(localStorage.getItem(KEY)||'[]'))}catch(e){items=[];ok=false}
+items=items.filter(function(x){return !(x.del&&Date.now()-(x.u||0)>90*86400000)});
 var BK='myfilms-last-export';
 // Identifiant d'application Google (public, non secret). Vide = synchronisation Google masquée.
 var GCLIENT='942122623739-8furl2jomo2rd25u7h0reqqgk6caoq9u.apps.googleusercontent.com',GS='https://www.googleapis.com/auth/drive.appdata',GFLAG='myfilms-google',GNAME='my-films.json';
@@ -424,7 +426,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return
 function cls(f){return f==='4K UHD'?'uhd':f==='DVD'?'dvd':''}
 function render(){
   hcount();hrefresh();
-  var discs=items.filter(function(x){return x.k!=='f'}),fl=items.filter(function(x){return x.k==='f'});
+  var discs=items.filter(function(x){return x.k!=='f'&&!x.del}),fl=items.filter(function(x){return x.k==='f'});
   if(cwd&&!fl.some(function(f){return f.id===cwd}))cwd=null;
   var gs={};items.forEach(function(d){(d.g||[]).forEach(function(g){gs[g]=1})});
   var fge=$('fg'),cv=fge.value,oh='<option value="">Tous les genres</option>';
@@ -492,7 +494,7 @@ $('save').onclick=function(){
 };
 $('del').onclick=function(){
   if(!cur)return;
-  if(confirm('Supprimer ce disque de la collection ?')){items=items.filter(function(x){return x.id!==cur});save();close();render()}
+  if(confirm('Supprimer ce disque de la collection ?')){items=items.map(function(x){return x.id===cur?{id:x.id,del:true,u:Date.now()}:x});save();close();render()}
 };
 function go(li){if(sup||!li)return;var f=li.getAttribute('data-fid');if(f){cwd=f;render()}else open(li.getAttribute('data-id'))}
 $('list').onclick=function(e){go(e.target.closest('li'))};
@@ -529,7 +531,7 @@ $('f-t').oninput=function(){
 };
 $('bf').onclick=function(){
   if(!tk()){$('stmsg').textContent='Ajoute d’abord ta clé TMDB.';return}
-  var todo=items.filter(function(d){return d.k!=='f'&&!(d.g&&d.g.length)}),n=0,i=0;
+  var todo=items.filter(function(d){return d.k!=='f'&&!d.del&&!(d.g&&d.g.length)}),n=0,i=0;
   if(!todo.length){$('stmsg').textContent='Rien à compléter.';return}
   (function next(){
     if(i>=todo.length){save();render();$('stmsg').textContent=n+' fiche(s) complétée(s) sur '+todo.length+'.';return}
@@ -550,7 +552,7 @@ $('bc').onclick=function(e){
   else if(a==='del'&&f&&confirm('Supprimer le dossier « '+f.t+' » ? Son contenu (disques et sous-dossiers) sera déplacé dans le dossier parent.')){
     var up=f.par||null;
     items.forEach(function(x){if(x.k==='f'){if((x.par||null)===cwd){x.par=up;x.u=Date.now()}}else if((x.fo||null)===cwd){x.fo=up;x.u=Date.now()}});
-    items=items.filter(function(x){return x.id!==cwd});cwd=up;save();render();
+    items=items.map(function(x){return x.id===cwd?{id:x.id,del:true,u:Date.now()}:x});cwd=up;save();render();
   }
 };
 function descIds(id){var o=[id];items.forEach(function(f){if(f.k==='f'&&(f.par||null)===id)o=o.concat(descIds(f.id))});return o}
@@ -606,7 +608,7 @@ document.addEventListener('touchmove',function(e){if(dr&&dr.on)e.preventDefault(
 $('list').addEventListener('contextmenu',function(e){if(dr)e.preventDefault()});
 $('list').addEventListener('dragstart',function(e){e.preventDefault()});
 $('exp').onclick=function(){
-  var b=new Blob([JSON.stringify(items,null,1)],{type:'application/json'});
+  var b=new Blob([JSON.stringify(items.filter(function(x){return !x.del}),null,1)],{type:'application/json'});
   var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='my-films-sauvegarde.json';
   document.body.appendChild(a);a.click();a.remove();
   try{localStorage.setItem(BK,String(Date.now()))}catch(e){}
@@ -618,15 +620,19 @@ $('file').onchange=function(){
   r.onload=function(){
     try{
       var a=JSON.parse(r.result);if(!Array.isArray(a))throw 0;a=clean(a);
-      var ids={};items.forEach(function(x){ids[x.id]=1});
-      var n=0;a.forEach(function(x){if(x&&x.t&&!ids[x.id]){items.push(x);n++}});
+      var idx={};items.forEach(function(x,i){idx[x.id]=i});
+      var n=0;a.forEach(function(x){
+        if(!x||!x.t||x.del)return;
+        if(!(x.id in idx)){items.push(x);n++}
+        else if(items[idx[x.id]].del){x.u=Date.now();items[idx[x.id]]=x;n++}
+      });
       save();render();$('stmsg').textContent=n+' disque(s) importé(s).';
     }catch(e){$('stmsg').textContent='Fichier invalide : choisis un export de cette appli.'}
   };
   r.readAsText(f);this.value='';
 };
 var hid=null,hlast=null;
-function discsAll(){return items.filter(function(x){return x.k!=='f'})}
+function discsAll(){return items.filter(function(x){return x.k!=='f'&&!x.del})}
 function hcount(){var n=discsAll().length;$('hcnt').textContent=n+(n>1?' films':' film')}
 function hnorm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function hfind(q){var n=hnorm(q).trim();if(!n)return[];return discsAll().filter(function(d){return hnorm([d.t,d.y,d.e,(d.g||[]).join(' ')].join(' ')).indexOf(n)>-1}).sort(function(a,b){return a.t.localeCompare(b.t,'fr',{sensitivity:'base'})})}
@@ -640,7 +646,7 @@ function hlist(r){
   $('hres').innerHTML=h+'</div>';
 }
 function hfilm(id){
-  var d=items.filter(function(x){return x.id===id&&x.k!=='f'})[0];if(!d){hclear();return}
+  var d=items.filter(function(x){return x.id===id&&x.k!=='f'&&!x.del})[0];if(!d){hclear();return}
   hid=id;$('hpic').style.display='none';
   var meta=[d.y,d.f,(d.g||[]).slice(0,3).join(', ')].filter(Boolean).join(' · ');
   $('hres').innerHTML='<div class="hf">'+(d.p?'<img alt="Jaquette de '+esc(d.t)+'" draggable="false" src="https://image.tmdb.org/t/p/w500'+d.p+'">':'<div class="nop">'+esc(d.t)+'</div>')+'<div class="t">'+esc(d.t)+'</div><div class="m">'+esc(meta)+'</div><div class="acts" style="justify-content:center;margin-top:10px"><button data-h="open">Ouvrir la fiche</button><button data-h="close">Fermer</button></div></div>';
