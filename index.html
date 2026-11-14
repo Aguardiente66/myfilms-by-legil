@@ -207,6 +207,7 @@ li.fo .fi{width:42px;height:42px;padding:8px;box-sizing:border-box;border-radius
     <label for="tk">Clé API TMDB (v3), gratuite sur themoviedb.org</label>
     <div class="bar"><input id="tk" autocomplete="off"><button id="tks">OK</button></div>
     <button id="bf" style="margin-top:10px;width:100%">Compléter genres et affiches des anciens disques</button>
+    <p class="m" id="ver" style="text-align:center;margin-top:14px"></p>
   </details>
 </main>
 
@@ -670,6 +671,7 @@ $('hres').onclick=function(e){
 function route(){var l=location.hash==='#liste';$('home').style.display=l?'none':'';$('app').style.display=l?'':'none';window.scrollTo(0,0);if(l)render();else hcount()}
 window.addEventListener('hashchange',route);
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(function(){});
+$('ver').textContent='Version 6';
 warn();render();pull();route();
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))navigator.serviceWorker.register('sw.js').catch(function(){});
 })();
