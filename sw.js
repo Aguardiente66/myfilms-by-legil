@@ -1,11 +1,14 @@
 // Mise en mémoire de l'application pour qu'elle s'ouvre sans réseau.
 // Pour forcer une mise à jour chez tous les appareils, changer V.
 // Seuls les caches « myfilms- » sont gérés ici : d'autres sites du même compte partagent le même espace de stockage.
-const V = 'myfilms-v7', IMG = 'myfilms-img-v1';
+const V = 'myfilms-v8', IMG = 'myfilms-img-v1';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'confidentialite.html'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // 'reload' : on ignore la copie gardée par le navigateur (GitHub Pages la garde jusqu'à 10 minutes).
+  e.waitUntil(caches.open(V)
+    .then(c => Promise.all(SHELL.map(u => fetch(new Request(u, { cache: 'reload' })).then(r => { if (!r.ok) throw new Error(u); return c.put(u, r); }))))
+    .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
@@ -18,7 +21,7 @@ self.addEventListener('fetch', e => {
   if (u.origin === location.origin) {
     // Page et fichiers de l'application : copie immédiate, mise à jour en arrière-plan.
     e.respondWith(caches.match(r, { ignoreSearch: true }).then(hit => {
-      const net = fetch(r).then(res => {
+      const net = fetch(r, { cache: 'no-cache' }).then(res => {
         if (res && res.ok) { const cp = res.clone(); caches.open(V).then(c => c.put(r, cp)); }
         return res;
       });
