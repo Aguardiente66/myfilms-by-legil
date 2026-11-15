@@ -608,12 +608,27 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){if(dr)dend(
 document.addEventListener('touchmove',function(e){if(dr&&dr.on)e.preventDefault()},{passive:false});
 $('list').addEventListener('contextmenu',function(e){if(dr)e.preventDefault()});
 $('list').addEventListener('dragstart',function(e){e.preventDefault()});
+function dayStr(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
+function expDone(msg){try{localStorage.setItem(BK,String(Date.now()))}catch(e){}status();if(msg)$('stmsg').textContent=msg+' '+$('stmsg').textContent}
+function expCancel(){$('stmsg').textContent='Sauvegarde annulée : rien n’a été enregistré. '+$('stmsg').textContent}
+function expDownload(b,name){var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href)},4000);expDone('')}
 $('exp').onclick=function(){
-  var b=new Blob([JSON.stringify(items.filter(function(x){return !x.del}),null,1)],{type:'application/json'});
-  var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='my-films-sauvegarde.json';
-  document.body.appendChild(a);a.click();a.remove();
-  try{localStorage.setItem(BK,String(Date.now()))}catch(e){}
-  status();
+  var name='my-films-sauvegarde-'+dayStr()+'.json',b=new Blob([JSON.stringify(items.filter(function(x){return !x.del}),null,1)],{type:'application/json'});
+  var touch=window.matchMedia&&matchMedia('(pointer:coarse)').matches;
+  if(window.showSaveFilePicker&&!touch){
+    showSaveFilePicker({suggestedName:name,types:[{description:'Sauvegarde My Films',accept:{'application/json':['.json']}}]})
+      .then(function(h){return h.createWritable().then(function(w){return w.write(b).then(function(){return w.close()})})})
+      .then(function(){expDone('Sauvegarde enregistrée.')})
+      .catch(function(e){if(e&&e.name==='AbortError')expCancel();else expDownload(b,name)});
+    return;
+  }
+  var f=null;try{f=new File([b],name,{type:'application/json'})}catch(e){}
+  if(f&&navigator.canShare&&navigator.share&&navigator.canShare({files:[f]})){
+    navigator.share({files:[f],title:'Sauvegarde My Films'}).then(function(){expDone('Sauvegarde envoyée.')})
+      .catch(function(e){if(e&&e.name==='AbortError')expCancel();else expDownload(b,name)});
+    return;
+  }
+  expDownload(b,name);
 };
 $('imp').onclick=function(){$('file').click()};
 $('file').onchange=function(){
@@ -671,7 +686,7 @@ $('hres').onclick=function(e){
 function route(){var l=location.hash==='#liste';$('home').style.display=l?'none':'';$('app').style.display=l?'':'none';window.scrollTo(0,0);if(l)render();else hcount()}
 window.addEventListener('hashchange',route);
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(function(){});
-$('ver').textContent='Version 6';
+$('ver').textContent='Version 7';
 warn();render();pull();route();
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))navigator.serviceWorker.register('sw.js').catch(function(){});
 })();
