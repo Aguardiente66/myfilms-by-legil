@@ -154,6 +154,10 @@ li.fo .fi{width:42px;height:42px;padding:8px;box-sizing:border-box;border-radius
 .sig{margin:16px 0 4px;font-weight:700;letter-spacing:.02em;color:#4a52e0}
 .tmdb{max-width:520px;margin:0 auto;font-size:.78rem;color:var(--mut)}
 .tmdb a{color:inherit}
+textarea{width:100%;font:inherit;color:var(--ink);padding:10px 12px;line-height:1.4;resize:vertical;min-height:84px;max-height:240px;overflow-y:auto;border:1px solid rgba(160,180,225,.55);border-radius:14px;background-color:var(--glass);box-shadow:0 2px 8px rgba(40,70,140,.06)}
+textarea:focus{outline:none;border-color:#6a8dff;box-shadow:0 0 0 4px rgba(90,130,255,.18)}
+.hn{white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;max-width:520px;margin:12px auto 0;padding:10px 14px;border-radius:12px;background:var(--glass);border:1px solid var(--gb);font-size:.92rem;line-height:1.45}
+.hnl{max-width:520px;margin:12px auto -6px;text-align:left;font-size:.8rem;font-weight:700;color:var(--mut)}
 </style>
 </head>
 <body>
@@ -229,7 +233,7 @@ li.fo .fi{width:42px;height:42px;padding:8px;box-sizing:border-box;border-radius
       <div><label for="f-s">Statut</label><select id="f-s"><option value="a">À voir</option><option value="v">Vu</option></select></div>
       <div><label for="f-l">Prêté à</label><input id="f-l" placeholder="Vide = chez toi"></div>
     </div>
-    <label for="f-n">Notes</label><input id="f-n">
+    <label for="f-n">Notes</label><textarea id="f-n" rows="3" maxlength="2000"></textarea>
     <div class="foot">
       <button class="p" id="save">Enregistrer</button>
       <button id="cancel">Annuler</button>
@@ -254,7 +258,7 @@ function clean(a){
     if(x.k==='f'){d.k='f';if(typeof x.par==='string'&&IDRE.test(x.par))d.par=x.par}
     else{
       d.y=S(x.y,4).replace(/\D/g,'');d.f=['Blu-ray','4K UHD','DVD'].indexOf(x.f)>-1?x.f:'Blu-ray';
-      d.e=S(x.e,200);d.s=x.s==='v'?'v':'a';d.l=S(x.l,100);d.n=S(x.n,500);
+      d.e=S(x.e,200);d.s=x.s==='v'?'v':'a';d.l=S(x.l,100);d.n=S(x.n,2000);
       d.g=Array.isArray(x.g)?x.g.filter(function(g){return typeof g==='string'}).map(function(g){return g.slice(0,40)}).slice(0,10):[];
       if(typeof x.p==='string'&&PRE.test(x.p))d.p=x.p;
       if(typeof x.fo==='string'&&IDRE.test(x.fo))d.fo=x.fo;
@@ -479,7 +483,7 @@ function open(id){
   function fp(f){var o=f.t,c=f.par||null,k=0;while(c&&k++<20){var q0=fs0.filter(function(x){return x.id===c})[0];if(!q0)break;o=q0.t+' / '+o;c=q0.par||null}return o}
   var fo='<option value="">(Accueil, aucun dossier)</option>';
   fs0.map(function(f){return{id:f.id,l:fp(f)}}).sort(function(a,b){return a.l.localeCompare(b.l,'fr',{sensitivity:'base'})}).forEach(function(f){fo+='<option value="'+f.id+'">'+esc(f.l)+'</option>'});
-  $('f-d').innerHTML=fo;$('f-d').value=id?(d.fo||''):(cwd||'');$('f-s').value=d.s||'a';$('f-l').value=d.l||'';$('f-n').value=d.n||'';
+  $('f-d').innerHTML=fo;$('f-d').value=id?(d.fo||''):(cwd||'');$('f-s').value=d.s||'a';$('f-l').value=d.l||'';$('f-n').value=d.n||'';growN();
   $('del').style.display=id?'':'none';$('scmsg').textContent='';
   $('ed').classList.add('on');$('f-t').focus();
 }
@@ -608,6 +612,8 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){if(dr)dend(
 document.addEventListener('touchmove',function(e){if(dr&&dr.on)e.preventDefault()},{passive:false});
 $('list').addEventListener('contextmenu',function(e){if(dr)e.preventDefault()});
 $('list').addEventListener('dragstart',function(e){e.preventDefault()});
+function growN(){var t=$('f-n');t.style.height='auto';t.style.height=Math.min(240,Math.max(84,t.scrollHeight+2))+'px'}
+$('f-n').addEventListener('input',growN);
 function dayStr(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
 function expDone(msg){try{localStorage.setItem(BK,String(Date.now()))}catch(e){}status();if(msg)$('stmsg').textContent=msg+' '+$('stmsg').textContent}
 function expCancel(){$('stmsg').textContent='Sauvegarde annulée : rien n’a été enregistré. '+$('stmsg').textContent}
@@ -665,7 +671,7 @@ function hfilm(id){
   var d=items.filter(function(x){return x.id===id&&x.k!=='f'&&!x.del})[0];if(!d){hclear();return}
   hid=id;$('hpic').style.display='none';
   var meta=[d.y,d.f,(d.g||[]).slice(0,3).join(', ')].filter(Boolean).join(' · ');
-  $('hres').innerHTML='<div class="hf">'+(d.p?'<img alt="Jaquette de '+esc(d.t)+'" draggable="false" src="https://image.tmdb.org/t/p/w500'+d.p+'">':'<div class="nop">'+esc(d.t)+'</div>')+'<div class="t">'+esc(d.t)+'</div><div class="m">'+esc(meta)+'</div><div class="acts" style="justify-content:center;margin-top:10px"><button data-h="open">Ouvrir la fiche</button><button data-h="close">Fermer</button></div></div>';
+  $('hres').innerHTML='<div class="hf">'+(d.p?'<img alt="Jaquette de '+esc(d.t)+'" draggable="false" src="https://image.tmdb.org/t/p/w500'+d.p+'">':'<div class="nop">'+esc(d.t)+'</div>')+'<div class="t">'+esc(d.t)+'</div><div class="m">'+esc(meta)+'</div>'+(d.n&&d.n.trim()?'<div class="hnl">Notes</div><div class="hn">'+esc(d.n)+'</div>':'')+'<div class="acts" style="justify-content:center;margin-top:10px"><button data-h="open">Ouvrir la fiche</button><button data-h="close">Fermer</button></div></div>';
 }
 function hrefresh(){if(hid)hfilm(hid)}
 function hgo(){var v=$('hq').value.trim();if(!v){toast('Tape le titre d’un film.');return}var r=hfind(v);if(r.length===1)hfilm(r[0].id);else hlist(r)}
@@ -686,7 +692,7 @@ $('hres').onclick=function(e){
 function route(){var l=location.hash==='#liste';$('home').style.display=l?'none':'';$('app').style.display=l?'':'none';window.scrollTo(0,0);if(l)render();else hcount()}
 window.addEventListener('hashchange',route);
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(function(){});
-$('ver').textContent='Version 8';
+$('ver').textContent='Version 9';
 warn();render();pull();route();
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))navigator.serviceWorker.register('sw.js').catch(function(){});
 })();
