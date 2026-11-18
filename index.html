@@ -210,7 +210,7 @@ textarea:focus{outline:none;border-color:#6a8dff;box-shadow:0 0 0 4px rgba(90,13
     </div>
     <label for="tk">Clé API TMDB (v3), gratuite sur themoviedb.org</label>
     <div class="bar"><input id="tk" autocomplete="off"><button id="tks">OK</button></div>
-    <button id="bf" style="margin-top:10px;width:100%">Compléter genres et affiches des anciens disques</button>
+    <button id="bf" style="margin-top:10px;width:100%">Compléter genres, durées et résumés</button>
     <p class="m" id="ver" style="text-align:center;margin-top:14px"></p>
   </details>
 </main>
@@ -227,6 +227,8 @@ textarea:focus{outline:none;border-color:#6a8dff;box-shadow:0 0 0 4px rgba(90,13
     </div>
     <label for="f-e">Éditeur</label><input id="f-e">
     <label for="f-g">Genres (séparés par des virgules)</label><input id="f-g" placeholder="Action, Science-fiction">
+    <label for="f-r">Durée (en minutes)</label><input id="f-r" inputmode="numeric" maxlength="3">
+    <label for="f-o">Résumé</label><textarea id="f-o" rows="3" maxlength="600"></textarea>
     <label for="f-d">Dossier</label><select id="f-d"></select>
     <div class="msg" id="scmsg"></div>
     <div class="row">
@@ -261,6 +263,8 @@ function clean(a){
       d.e=S(x.e,200);d.s=x.s==='v'?'v':'a';d.l=S(x.l,100);d.n=S(x.n,2000);
       d.g=Array.isArray(x.g)?x.g.filter(function(g){return typeof g==='string'}).map(function(g){return g.slice(0,40)}).slice(0,10):[];
       if(typeof x.p==='string'&&PRE.test(x.p))d.p=x.p;
+      if(typeof x.rt==='number'&&x.rt>0&&x.rt<1000)d.rt=Math.round(x.rt);
+      if(typeof x.ov==='string'&&x.ov.trim())d.ov=S(x.ov,600);
       if(typeof x.fo==='string'&&IDRE.test(x.fo))d.fo=x.fo;
       if(typeof x.dt==='number')d.dt=x.dt;
       if(typeof x.c==='string')d.c=S(x.c,40);
@@ -483,7 +487,7 @@ function open(id){
   function fp(f){var o=f.t,c=f.par||null,k=0;while(c&&k++<20){var q0=fs0.filter(function(x){return x.id===c})[0];if(!q0)break;o=q0.t+' / '+o;c=q0.par||null}return o}
   var fo='<option value="">(Accueil, aucun dossier)</option>';
   fs0.map(function(f){return{id:f.id,l:fp(f)}}).sort(function(a,b){return a.l.localeCompare(b.l,'fr',{sensitivity:'base'})}).forEach(function(f){fo+='<option value="'+f.id+'">'+esc(f.l)+'</option>'});
-  $('f-d').innerHTML=fo;$('f-d').value=id?(d.fo||''):(cwd||'');$('f-s').value=d.s||'a';$('f-l').value=d.l||'';$('f-n').value=d.n||'';growN();
+  $('f-d').innerHTML=fo;$('f-d').value=id?(d.fo||''):(cwd||'');$('f-s').value=d.s||'a';$('f-l').value=d.l||'';$('f-n').value=d.n||'';$('f-r').value=d.rt||'';$('f-o').value=d.ov||'';growN();
   $('del').style.display=id?'':'none';$('scmsg').textContent='';
   $('ed').classList.add('on');$('f-t').focus();
 }
@@ -493,7 +497,7 @@ $('cancel').onclick=close;
 $('save').onclick=function(){
   var t=$('f-t').value.trim();
   if(!t){$('scmsg').textContent='Le titre est obligatoire.';$('f-t').focus();return}
-  var d={id:cur||uid(),t:t,y:$('f-y').value.replace(/\D/g,'').slice(0,4),f:$('f-f').value,e:$('f-e').value.trim(),fo:$('f-d').value||null,p:(PRE.test(poster)?poster:''),g:$('f-g').value.split(',').map(function(x){return x.trim()}).filter(Boolean),dt:((items.filter(function(x){return x.id===cur})[0]||{}).dt||Date.now()),u:Date.now(),s:$('f-s').value,l:$('f-l').value.trim(),n:$('f-n').value.trim()};
+  var d={id:cur||uid(),t:t,y:$('f-y').value.replace(/\D/g,'').slice(0,4),f:$('f-f').value,e:$('f-e').value.trim(),fo:$('f-d').value||null,p:(PRE.test(poster)?poster:''),g:$('f-g').value.split(',').map(function(x){return x.trim()}).filter(Boolean),dt:((items.filter(function(x){return x.id===cur})[0]||{}).dt||Date.now()),u:Date.now(),s:$('f-s').value,l:$('f-l').value.trim(),n:$('f-n').value.trim(),rt:(function(v){return v>0&&v<1000?v:undefined})(parseInt($('f-r').value,10)),ov:$('f-o').value.trim()||undefined};
   if(cur){items=items.map(function(x){return x.id===cur?d:x})}else{items.push(d)}
   save();close();render();
 };
@@ -520,7 +524,20 @@ function tm(q){
       $('scmsg').textContent=timed?'Recherche TMDB trop lente : réessaie.':'Recherche TMDB impossible (clé invalide ou hors ligne).';return [];
     }).then(function(r){clearTimeout(to);return r});
 }
-function pick(m,keep){$('f-t').value=m.title;$('f-y').value=(m.release_date||'').slice(0,4);poster=m.poster_path||'';$('f-g').value=(m.genre_ids||[]).map(function(i){return GN[i]}).filter(Boolean).join(', ');if(!keep){$('sg').innerHTML='';$('scmsg').textContent=''}}
+function tmDetails(id){
+  if(!tk())return Promise.resolve(null);
+  return fetch('https://api.themoviedb.org/3/movie/'+encodeURIComponent(id)+'?api_key='+encodeURIComponent(tk())+'&language=fr-FR').then(function(r){return r.ok?r.json():null}).catch(function(){return null});
+}
+function fillDetails(m){
+  $('f-r').value='';$('f-o').value=m.overview?String(m.overview).slice(0,600):'';growN();
+  tmDetails(m.id).then(function(j){
+    if(!j)return;
+    if(j.runtime>0)$('f-r').value=j.runtime;
+    if(j.overview)$('f-o').value=String(j.overview).slice(0,600);
+    growN();
+  });
+}
+function pick(m,keep){fillDetails(m);$('f-t').value=m.title;$('f-y').value=(m.release_date||'').slice(0,4);poster=m.poster_path||'';$('f-g').value=(m.genre_ids||[]).map(function(i){return GN[i]}).filter(Boolean).join(', ');if(!keep){$('sg').innerHTML='';$('scmsg').textContent=''}}
 function show(res){
   var h='';res.slice(0,6).forEach(function(m,i){
     h+='<button type="button" data-i="'+i+'">'+(m.poster_path?'<img class="po" alt="" src="https://image.tmdb.org/t/p/w154'+m.poster_path+'">':'')+'<span>'+esc(m.title)+' ('+esc((m.release_date||'').slice(0,4)||'?')+')</span></button>';
@@ -536,15 +553,26 @@ $('f-t').oninput=function(){
 };
 $('bf').onclick=function(){
   if(!tk()){$('stmsg').textContent='Ajoute d’abord ta clé TMDB.';return}
-  var todo=items.filter(function(d){return d.k!=='f'&&!d.del&&!(d.g&&d.g.length)}),n=0,i=0;
+  var todo=items.filter(function(d){return d.k!=='f'&&!d.del&&(!(d.g&&d.g.length)||!d.rt||!d.ov)}),n=0,i=0;
   if(!todo.length){$('stmsg').textContent='Rien à compléter.';return}
   (function next(){
     if(i>=todo.length){save();render();$('stmsg').textContent=n+' fiche(s) complétée(s) sur '+todo.length+'.';return}
     var d=todo[i++];$('stmsg').textContent='Complétion… '+i+'/'+todo.length;
     tm(d.t).then(function(r){r=r||[];
       var m=r.filter(function(x){return d.y&&(x.release_date||'').slice(0,4)===d.y})[0]||r[0];
-      if(m){d.g=(m.genre_ids||[]).map(function(g){return GN[g]}).filter(Boolean);if(!d.p&&m.poster_path)d.p=m.poster_path;if(!d.y&&m.release_date)d.y=m.release_date.slice(0,4);if(d.g.length){n++;d.u=Date.now()}}
-      setTimeout(next,250);
+      if(!m){setTimeout(next,250);return}
+      var ch=false;
+      if(!(d.g&&d.g.length)){var g=(m.genre_ids||[]).map(function(x){return GN[x]}).filter(Boolean);if(g.length){d.g=g;ch=true}}
+      if(!d.p&&m.poster_path){d.p=m.poster_path;ch=true}
+      if(!d.y&&m.release_date){d.y=m.release_date.slice(0,4);ch=true}
+      return tmDetails(m.id).then(function(j){
+        if(j){
+          if(!d.rt&&j.runtime>0){d.rt=Math.round(j.runtime);ch=true}
+          if(!d.ov&&j.overview){d.ov=String(j.overview).slice(0,600);ch=true}
+        }
+        if(ch){n++;d.u=Date.now()}
+        setTimeout(next,250);
+      });
     });
   })();
 };
@@ -612,8 +640,10 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){if(dr)dend(
 document.addEventListener('touchmove',function(e){if(dr&&dr.on)e.preventDefault()},{passive:false});
 $('list').addEventListener('contextmenu',function(e){if(dr)e.preventDefault()});
 $('list').addEventListener('dragstart',function(e){e.preventDefault()});
-function growN(){var t=$('f-n');t.style.height='auto';t.style.height=Math.min(240,Math.max(84,t.scrollHeight+2))+'px'}
-$('f-n').addEventListener('input',growN);
+function growT(id){var t=$(id);t.style.height='auto';t.style.height=Math.min(240,Math.max(84,t.scrollHeight+2))+'px'}
+function growN(){growT('f-n');growT('f-o')}
+$('f-n').addEventListener('input',function(){growT('f-n')});
+$('f-o').addEventListener('input',function(){growT('f-o')});
 function dayStr(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
 function expDone(msg){try{localStorage.setItem(BK,String(Date.now()))}catch(e){}status();if(msg)$('stmsg').textContent=msg+' '+$('stmsg').textContent}
 function expCancel(){$('stmsg').textContent='Sauvegarde annulée : rien n’a été enregistré. '+$('stmsg').textContent}
@@ -667,10 +697,11 @@ function hlist(r){
   if(r.length>8)h+='<p class="m">'+(r.length-8)+' autres résultats : précise ta recherche.</p>';
   $('hres').innerHTML=h+'</div>';
 }
+function fmtDur(m){if(!(m>0))return '';return m<60?m+' min':Math.floor(m/60)+' h '+('0'+(m%60)).slice(-2)}
 function hfilm(id){
   var d=items.filter(function(x){return x.id===id&&x.k!=='f'&&!x.del})[0];if(!d){hclear();return}
   hid=id;$('hpic').style.display='none';
-  var meta=[d.y,d.f,(d.g||[]).slice(0,3).join(', ')].filter(Boolean).join(' · ');
+  var meta=[d.y,d.f,fmtDur(d.rt),(d.g||[]).slice(0,3).join(', ')].filter(Boolean).join(' · ');
   $('hres').innerHTML='<div class="hf">'+(d.p?'<img alt="Jaquette de '+esc(d.t)+'" draggable="false" src="https://image.tmdb.org/t/p/w500'+d.p+'">':'<div class="nop">'+esc(d.t)+'</div>')+'<div class="t">'+esc(d.t)+'</div><div class="m">'+esc(meta)+'</div>'+(d.n&&d.n.trim()?'<div class="hnl">Notes</div><div class="hn">'+esc(d.n)+'</div>':'')+'<div class="acts" style="justify-content:center;margin-top:10px"><button data-h="open">Ouvrir la fiche</button><button data-h="close">Fermer</button></div></div>';
 }
 function hrefresh(){if(hid)hfilm(hid)}
@@ -692,7 +723,7 @@ $('hres').onclick=function(e){
 function route(){var l=location.hash==='#liste';$('home').style.display=l?'none':'';$('app').style.display=l?'':'none';window.scrollTo(0,0);if(l)render();else hcount()}
 window.addEventListener('hashchange',route);
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(function(){});
-$('ver').textContent='Version 9';
+$('ver').textContent='Version 10';
 warn();render();pull();route();
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))navigator.serviceWorker.register('sw.js').catch(function(){});
 })();
