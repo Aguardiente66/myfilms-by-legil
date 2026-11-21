@@ -489,9 +489,9 @@ function open(id){
   fs0.map(function(f){return{id:f.id,l:fp(f)}}).sort(function(a,b){return a.l.localeCompare(b.l,'fr',{sensitivity:'base'})}).forEach(function(f){fo+='<option value="'+f.id+'">'+esc(f.l)+'</option>'});
   $('f-d').innerHTML=fo;$('f-d').value=id?(d.fo||''):(cwd||'');$('f-s').value=d.s||'a';$('f-l').value=d.l||'';$('f-n').value=d.n||'';$('f-r').value=d.rt||'';$('f-o').value=d.ov||'';growN();
   $('del').style.display=id?'':'none';$('scmsg').textContent='';
-  $('ed').classList.add('on');$('f-t').focus();
+  $('ed').classList.add('on');if(!(history.state&&history.state.k==='dlg'))navPush('dlg');$('f-t').focus();
 }
-function close(){$('ed').classList.remove('on');cur=null}
+function close(){$('ed').classList.remove('on');cur=null;navPop('dlg')}
 $('add').onclick=function(){open(null)};
 $('cancel').onclick=close;
 $('save').onclick=function(){
@@ -505,7 +505,7 @@ $('del').onclick=function(){
   if(!cur)return;
   if(confirm('Supprimer ce disque de la collection ?')){items=items.map(function(x){return x.id===cur?{id:x.id,del:true,u:Date.now()}:x});save();close();render()}
 };
-function go(li){if(sup||!li)return;var f=li.getAttribute('data-fid');if(f){cwd=f;render()}else open(li.getAttribute('data-id'))}
+function go(li){if(sup||!li)return;var f=li.getAttribute('data-fid');if(f){cwd=f;navPush('dir',f);render()}else open(li.getAttribute('data-id'))}
 $('list').onclick=function(e){go(e.target.closest('li'))};
 $('list').onkeydown=function(e){if(e.key==='Enter')go(e.target.closest('li'))};
 ['q','fs','ff','fg','so'].forEach(function(i){$(i).oninput=render});
@@ -578,14 +578,14 @@ $('bf').onclick=function(){
 };
 $('bc').onclick=function(e){
   var b=e.target.closest('button');if(!b)return;
-  if(b.hasAttribute('data-go')){cwd=b.getAttribute('data-go')||null;render();return}
+  if(b.hasAttribute('data-go')){cwd=b.getAttribute('data-go')||null;navPush('dir',cwd);render();return}
   var a=b.getAttribute('data-a'),f=items.filter(function(x){return x.id===cwd})[0],n;
   if(a==='new'){n=prompt('Nom du nouveau dossier :');if(n&&n.trim()){items.push({id:uid(),k:'f',t:n.trim(),par:cwd,u:Date.now()});save();render()}}
   else if(a==='ren'&&f){n=prompt('Nouveau nom du dossier :',f.t);if(n&&n.trim()){f.t=n.trim();f.u=Date.now();save();render()}}
   else if(a==='del'&&f&&confirm('Supprimer le dossier « '+f.t+' » ? Son contenu (disques et sous-dossiers) sera déplacé dans le dossier parent.')){
     var up=f.par||null;
     items.forEach(function(x){if(x.k==='f'){if((x.par||null)===cwd){x.par=up;x.u=Date.now()}}else if((x.fo||null)===cwd){x.fo=up;x.u=Date.now()}});
-    items=items.map(function(x){return x.id===cwd?{id:x.id,del:true,u:Date.now()}:x});cwd=up;save();render();
+    var gone=cwd;items=items.map(function(x){return x.id===gone?{id:x.id,del:true,u:Date.now()}:x});cwd=up;if(history.state&&history.state.k==='dir'&&history.state.cwd===gone)navPop('dir');save();render();
   }
 };
 function descIds(id){var o=[id];items.forEach(function(f){if(f.k==='f'&&(f.par||null)===id)o=o.concat(descIds(f.id))});return o}
@@ -683,14 +683,25 @@ $('file').onchange=function(){
   };
   r.readAsText(f);this.value='';
 };
-var hid=null,hlast=null;
+var hid=null,hlast=null,skipPop=false;
+function navPush(k,c){try{history.pushState({k:k,cwd:c===undefined?null:c},'')}catch(e){}}
+function navPop(k){if(skipPop)return;if(history.state&&history.state.k===k){skipPop=true;setTimeout(function(){skipPop=false},700);history.back()}}
+window.addEventListener('popstate',function(e){
+  if(skipPop){skipPop=false;return}
+  var st=e.state||{},dlg=$('ed').classList.contains('on');
+  if((st.k==='dlg'&&!dlg)||(st.k==='film'&&!hid)){history.back();return}
+  if(dlg&&st.k!=='dlg'){$('ed').classList.remove('on');cur=null}
+  if(hid&&st.k!=='film'&&st.k!=='dlg'){hid=null;$('hq').value='';$('hres').innerHTML='';$('hpic').style.display=''}
+  if(st.k==='dir')cwd=st.cwd||null;else if(st.k!=='dlg'&&st.k!=='film')cwd=null;
+  render();
+});
 function discsAll(){return items.filter(function(x){return x.k!=='f'&&!x.del})}
 function hcount(){var n=discsAll().length;$('hcnt').textContent=n+(n>1?' films':' film')}
 function hnorm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function hfind(q){var n=hnorm(q).trim();if(!n)return[];return discsAll().filter(function(d){return hnorm([d.t,d.y,d.e,(d.g||[]).join(' ')].join(' ')).indexOf(n)>-1}).sort(function(a,b){return a.t.localeCompare(b.t,'fr',{sensitivity:'base'})})}
-function hclear(){hid=null;$('hres').innerHTML='';$('hpic').style.display=''}
+function hclear(){hid=null;navPop('film');$('hres').innerHTML='';$('hpic').style.display=''}
 function hlist(r){
-  hid=null;$('hpic').style.display='none';
+  hid=null;navPop('film');$('hpic').style.display='none';
   if(!r.length){$('hres').innerHTML='<p class="m" style="text-align:center">Aucun film trouvé.</p>';return}
   var h='<div class="hl">';
   r.slice(0,8).forEach(function(d){h+='<button data-id="'+d.id+'">'+(d.p?'<img class="po" alt="" draggable="false" src="https://image.tmdb.org/t/p/w154'+d.p+'">':'')+'<span>'+esc(d.t)+(d.y?' ('+esc(d.y)+')':'')+'</span></button>'});
@@ -700,7 +711,7 @@ function hlist(r){
 function fmtDur(m){if(!(m>0))return '';return m<60?m+' min':Math.floor(m/60)+' h '+('0'+(m%60)).slice(-2)}
 function hfilm(id){
   var d=items.filter(function(x){return x.id===id&&x.k!=='f'&&!x.del})[0];if(!d){hclear();return}
-  hid=id;$('hpic').style.display='none';
+  var was=hid;hid=id;if(!was&&!(history.state&&history.state.k==='film'))navPush('film');$('hpic').style.display='none';
   var meta=[d.y,d.f,fmtDur(d.rt),(d.g||[]).slice(0,3).join(', ')].filter(Boolean).join(' · ');
   $('hres').innerHTML='<div class="hf">'+(d.p?'<img alt="Jaquette de '+esc(d.t)+'" draggable="false" src="https://image.tmdb.org/t/p/w500'+d.p+'">':'<div class="nop">'+esc(d.t)+'</div>')+'<div class="t">'+esc(d.t)+'</div><div class="m">'+esc(meta)+'</div>'+(d.n&&d.n.trim()?'<div class="hnl">Notes</div><div class="hn">'+esc(d.n)+'</div>':'')+'<div class="acts" style="justify-content:center;margin-top:10px"><button data-h="open">Ouvrir la fiche</button><button data-h="close">Fermer</button></div></div>';
 }
@@ -723,7 +734,7 @@ $('hres').onclick=function(e){
 function route(){var l=location.hash==='#liste';$('home').style.display=l?'none':'';$('app').style.display=l?'':'none';window.scrollTo(0,0);if(l)render();else hcount()}
 window.addEventListener('hashchange',route);
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(function(){});
-$('ver').textContent='Version 10';
+$('ver').textContent='Version 11';
 warn();render();pull();route();
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))navigator.serviceWorker.register('sw.js').catch(function(){});
 })();
