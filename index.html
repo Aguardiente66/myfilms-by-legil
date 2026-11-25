@@ -129,7 +129,7 @@ li{background:var(--glass);border:1px solid var(--gb);border-radius:16px;box-sha
 li:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(50,80,170,.2)}
 .sp{width:5px;margin:12px 0 12px 12px;border-radius:99px}
 .sp.fol{background:linear-gradient(180deg,#ffc94d,#f59e0b)}
-li img.po{width:52px;height:78px;border-radius:8px;margin:10px 0;box-shadow:0 4px 10px rgba(30,50,110,.25);object-fit:cover}
+li img.po{width:64px;height:96px;border-radius:8px;margin:10px 0;box-shadow:0 4px 10px rgba(30,50,110,.25);object-fit:cover}
 li .in{padding:10px 14px 10px 0}
 li .t{font-weight:700}
 li.fo .t{text-transform:uppercase;letter-spacing:.02em}
@@ -158,6 +158,9 @@ textarea{width:100%;font:inherit;color:var(--ink);padding:10px 12px;line-height:
 textarea:focus{outline:none;border-color:#6a8dff;box-shadow:0 0 0 4px rgba(90,130,255,.18)}
 .hn{white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;max-width:520px;margin:12px auto 0;padding:10px 14px;border-radius:12px;background:var(--glass);border:1px solid var(--gb);font-size:.92rem;line-height:1.45}
 .hnl{max-width:520px;margin:12px auto -6px;text-align:left;font-size:.8rem;font-weight:700;color:var(--mut)}
+.facts{flex-wrap:nowrap;gap:5px;align-items:stretch}
+.facts button{white-space:nowrap;font-size:.78rem;padding:7px 8px;min-width:0}
+.facts .up{margin-left:auto;display:inline-flex;align-items:center;padding:7px 11px}
 </style>
 </head>
 <body>
@@ -469,7 +472,7 @@ function render(){
     });
     var path=[],c=cwd;
     while(c){var f0=fl.filter(function(x){return x.id===c})[0];if(!f0)break;path.unshift(f0);c=f0.par||null}
-    bc=(cwd?'<div class="crumbs"><button data-go="">Toute la collection</button>'+path.map(function(f){return ' › <button data-go="'+f.id+'">'+esc(f.t)+'</button>'}).join('')+'</div>':'')+'<div class="acts"><button data-a="new">Nouveau dossier</button>'+(cwd?'<button data-a="ren">Renommer</button><button class="del" data-a="del">Supprimer le dossier</button>':'')+'</div>';
+    bc='<div class="acts facts"><button data-a="new">Nouveau dossier</button>'+(cwd?'<button data-a="ren">Renommer</button><button class="del" data-a="del">Supprimer le dossier</button><button class="up" data-up="1" aria-label="Remonter au dossier parent" title="Dossier parent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12H5M11 5l-7 7 7 7"/></svg></button>':'')+'</div>';
   }
   $('bc').innerHTML=bc;
   r.forEach(function(d){
@@ -578,7 +581,11 @@ $('bf').onclick=function(){
 };
 $('bc').onclick=function(e){
   var b=e.target.closest('button');if(!b)return;
-  if(b.hasAttribute('data-go')){cwd=b.getAttribute('data-go')||null;navPush('dir',cwd);render();return}
+  if(b.hasAttribute('data-up')){
+    var from=cwd,to=upId();cwd=to;
+    if(history.state&&history.state.k==='dir'&&history.state.cwd===from)navPop('dir');else navPush('dir',to);
+    render();return;
+  }
   var a=b.getAttribute('data-a'),f=items.filter(function(x){return x.id===cwd})[0],n;
   if(a==='new'){n=prompt('Nom du nouveau dossier :');if(n&&n.trim()){items.push({id:uid(),k:'f',t:n.trim(),par:cwd,u:Date.now()});save();render()}}
   else if(a==='ren'&&f){n=prompt('Nouveau nom du dossier :',f.t);if(n&&n.trim()){f.t=n.trim();f.u=Date.now();save();render()}}
@@ -588,12 +595,13 @@ $('bc').onclick=function(e){
     var gone=cwd;items=items.map(function(x){return x.id===gone?{id:x.id,del:true,u:Date.now()}:x});cwd=up;if(history.state&&history.state.k==='dir'&&history.state.cwd===gone)navPop('dir');save();render();
   }
 };
+function upId(){var f=items.filter(function(x){return x.id===cwd&&x.k==='f'&&!x.del})[0];return f?(f.par||null):null}
 function descIds(id){var o=[id];items.forEach(function(f){if(f.k==='f'&&(f.par||null)===id)o=o.concat(descIds(f.id))});return o}
 function toast(m){var t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('on')},2200)}
 function dtarget(x,y){
-  var el=document.elementFromPoint(x,y),t=el&&el.closest?el.closest('li.fo,#bc [data-go]'):null;
+  var el=document.elementFromPoint(x,y),t=el&&el.closest?el.closest('li.fo,#bc [data-up]'):null;
   if(!t)return null;
-  var id=t.hasAttribute('data-go')?(t.getAttribute('data-go')||null):t.getAttribute('data-fid');
+  var id=t.hasAttribute('data-up')?upId():t.getAttribute('data-fid');
   if(dr.fol&&id&&descIds(dr.id).indexOf(id)>-1)return null;
   return{el:t,id:id};
 }
@@ -734,7 +742,7 @@ $('hres').onclick=function(e){
 function route(){var l=location.hash==='#liste';$('home').style.display=l?'none':'';$('app').style.display=l?'':'none';window.scrollTo(0,0);if(l)render();else hcount()}
 window.addEventListener('hashchange',route);
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(function(){});
-$('ver').textContent='Version 11';
+$('ver').textContent='Version 12';
 warn();render();pull();route();
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))navigator.serviceWorker.register('sw.js').catch(function(){});
 })();
